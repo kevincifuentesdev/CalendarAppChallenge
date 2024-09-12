@@ -90,5 +90,114 @@ class Day:
                 else:
                     self.slots[slot] = event_id
 
-                    
-# TODO: Implement Calendar class here
+
+class Calendar:
+    def __init__(self):
+        self.days: dict[date, Day] = {}  # Inicializa el diccionario de days vacío
+        self.events: dict[str, Event] = {}  # Inicializa el diccionario de eventos vacío
+
+    def add_event(self, title: str, description: str, date_: date, start_at: time, end_at: time) -> str:
+        """Agrega un evento al calendario."""
+        # Verifica si la fecha es anterior a la fecha actual
+        if date_ < datetime.now().date():
+            date_lower_than_today_error()
+
+        # Si no hay un objeto Day para la fecha dada, crea uno y agrégalo al diccionario days
+        if date_ not in self.days:
+            self.days[date_] = Day(date_)
+
+        # Crea un nuevo evento
+        new_event = Event(title=title, description=description, date_=date_, start_at=start_at, end_at=end_at)
+        
+        # Agrega el evento al objeto Day correspondiente y al diccionario events
+        self.days[date_].add_event(new_event.id, start_at, end_at)
+        self.events[new_event.id] = new_event
+
+        return new_event.id
+
+    def add_reminder(self, event_id: str, date_time: datetime, type_: str = Reminder.EMAIL):
+        """Agrega un recordatorio a un evento existente."""
+        # Verifica si el evento con el event_id existe en el diccionario de eventos
+        if event_id not in self.events:
+            event_not_found_error()
+
+        # Agrega el recordatorio al evento correspondiente
+        self.events[event_id].add_reminder(date_time, type_)
+
+    def find_available_slots(self, date_: date) -> list[time]:
+        """Encuentra y retorna los espacios disponibles (slots) en una fecha dada."""
+        if date_ not in self.days:
+            return [time(h, m) for h in range(24) for m in [0, 15, 30, 45]]  # Si no hay eventos, todos los slots están disponibles
+
+        # Retorna los slots disponibles, es decir, aquellos que tienen valor None
+        available_slots = [slot for slot, event_id in self.days[date_].slots.items() if event_id is None]
+        return available_slots
+    
+    def update_event(self, event_id: str, title: str, description: str, date_: date, start_at: time, end_at: time):
+        event = self.events.get(event_id)
+        if not event:
+            event_not_found_error()
+
+        # Verifica si la fecha ha cambiado
+        is_new_date = False
+
+        if event.date_ != date_:
+            self.delete_event(event_id)
+            event = Event(title=title, description=description, date_=date_, start_at=start_at, end_at=end_at)
+            event.id = event_id
+            self.events[event_id] = event
+            is_new_date = True
+            if date_ not in self.days:
+                self.days[date_] = Day(date_)
+            day = self.days[date_]
+            day.add_event(event_id, start_at, end_at)
+        else:
+            event.title = title
+            event.description = description
+            event.date_ = date_
+            event.start_at = start_at
+            event.end_at = end_at
+
+        for day in self.days.values():
+            if not is_new_date and event_id in day.slots.values():
+                day.delete_event(event.id)
+                day.update_event(event.id, start_at, end_at)
+
+    def delete_event(self, event_id: str):
+        if event_id not in self.events:
+            event_not_found_error()
+
+        # Elimina el evento del diccionario de eventos
+        self.events.pop(event_id)
+
+        # Elimina el evento de los objetos Day
+        for day in self.days.values():
+            if event_id in day.slots.values():
+                day.delete_event(event_id)
+                break
+
+    def find_events(self, start_at: date, end_at: date) -> dict[date, list[Event]]:
+        """Encuentra eventos dentro del rango de fechas dado."""
+        events: dict[date, list[Event]] = {}
+        for event in self.events.values():
+            if start_at <= event.date_ <= end_at:
+                if event.date_ not in events:
+                    events[event.date_] = []
+                events[event.date_].append(event)
+        return events
+
+    def delete_reminder(self, event_id: str, reminder_index: int):
+        """Elimina un recordatorio de un evento."""
+        event = self.events.get(event_id)
+        if not event:
+            event_not_found_error()
+
+        event.delete_reminder(reminder_index)
+
+    def list_reminders(self, event_id: str) -> list[Reminder]:
+        """Lista los recordatorios de un evento."""
+        event = self.events.get(event_id)
+        if not event:
+            event_not_found_error()
+
+        return event.reminders
